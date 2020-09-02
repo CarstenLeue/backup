@@ -1,0 +1,12 @@
+{
+  "name": "backup",
+  "version": "1.0.0",
+  "main": "index.js",
+  "repository": "https://github.com/CarstenLeue/backup.git",
+  "author": "Dr. Carsten Leue",
+  "license": "MIT",
+  "dependencies": {
+    "fs-extra": "^9.0.1",
+    "rxjs": "^6.6.2"
+  }
+}
