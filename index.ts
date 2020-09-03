@@ -1,7 +1,5 @@
-import { newRootDir } from "./src/root";
-import { tmpdir } from "os";
-import { join } from "path";
+import { argv } from "process";
+import { sync } from "./src/sync";
 
-const ROOT = join(tmpdir(), "backup");
-
-console.log(newRootDir(ROOT));
+const [driver, script, src, dst] = argv;
+const sync$ = sync(src, dst).subscribe(console.log, console.error);

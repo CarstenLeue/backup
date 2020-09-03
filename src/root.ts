@@ -1,11 +1,10 @@
-import { readdir } from "fs-extra";
-import { bindNodeCallback, EMPTY, from, empty } from "rxjs";
-import { map, catchError, mergeMap, toArray, first, tap } from "rxjs/operators";
-import { join } from "path";
+import { readdir } from "graceful-fs";
+import { bindNodeCallback, Observable } from "rxjs";
+import { map } from "rxjs/operators";
 
 /** Scripts to handle root level folders */
 
-const rxReadDir = bindNodeCallback(readdir);
+const rxReadDir = bindNodeCallback<string, string[]>(readdir);
 
 function cmpTuple([nameLeft, dateLeft], [nameRight, dateRight]) {
   return dateLeft < dateRight ? +1 : dateLeft > dateRight ? -1 : 0;
@@ -17,19 +16,17 @@ const toFolderName = (date: Date): string =>
 const fromFolderName = (name: string): Date =>
   new Date(name.replace(/_/g, ":"));
 
-export const newRootDir = (rootFolder: string) =>
-  join(rootFolder, toFolderName(new Date()));
+export const newRootDir = () => toFolderName(new Date());
 
-export const latestRootDir = (rootFolder: string) =>
+const makePair = (name: string, date: number): [string, number] => [name, date];
+
+export const latestRootDir = (rootFolder: string): Observable<string> =>
   rxReadDir(rootFolder).pipe(
-    mergeMap((names) => from(names)),
-    tap(console.log),
-    map((name) => [name, fromFolderName(name).getTime()]),
-    catchError(empty),
-    toArray(),
-    map((all) => all.sort(cmpTuple)),
-    mergeMap((all) => from(all)),
-    first(),
-    map(([name]) => name),
-    map((name) => join(rootFolder, name))
+    map((names) =>
+      names
+        .map((name) => makePair(name, fromFolderName(name).getTime()))
+        .filter(([name, date]) => !Number.isNaN(date))
+    ),
+    map((tuples) => tuples.sort(cmpTuple)),
+    map(([[name]]) => name)
   );
