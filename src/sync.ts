@@ -42,12 +42,16 @@ function doSync(
           mergeMap((childStats) =>
             childStats.isDirectory()
               ? rxMkdir(join(dst, ...rel, child)).pipe(
-                  mergeMapTo(copyDeep([...rel, child]))
-                )
+                mergeMapTo(copyDeep([...rel, child]))
+              )
               : childStats.isFile()
-              ? copyFlat([...rel, child])
-              : EMPTY
-          )
+                ? copyFlat([...rel, child])
+                : EMPTY
+          ),
+          catchError(error => {
+            console.error(error);
+            return EMPTY;
+          })
         )
       )
     );
@@ -68,7 +72,11 @@ function doSync(
 
   const syncNew = (rel: Path): Observable<Path> =>
     rxStats(join(src, ...rel)).pipe(
-      mergeMap((stat) => copy(stat.isFile(), rel))
+      mergeMap((stat) => copy(stat.isFile(), rel)),
+      catchError(error => {
+        console.error(error);
+        return EMPTY;
+      })
     );
 
   function syncSingle(rel: Path): Observable<Path> {
