@@ -1,7 +1,7 @@
-import { mkdir } from "graceful-fs";
-import { parse } from "path";
-import { bindNodeCallback, from, Observable, of, UnaryFunction } from "rxjs";
-import { catchError, mapTo, mergeMapTo } from "rxjs/operators";
+import { mkdir } from 'fs-extra';
+import { parse } from 'path';
+import { bindNodeCallback, from, Observable, of, UnaryFunction } from 'rxjs';
+import { catchError, mapTo, mergeMapTo } from 'rxjs/operators';
 
 const rxMkDir = bindNodeCallback(mkdir);
 

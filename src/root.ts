@@ -1,6 +1,6 @@
-import { readdir } from "graceful-fs";
-import { bindNodeCallback, Observable } from "rxjs";
-import { map } from "rxjs/operators";
+import { readdir } from 'fs-extra';
+import { bindNodeCallback, Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
 
 /** Scripts to handle root level folders */
 
@@ -11,10 +11,10 @@ function cmpTuple([nameLeft, dateLeft], [nameRight, dateRight]) {
 }
 
 const toFolderName = (date: Date): string =>
-  date.toISOString().replace(/\:/g, "_");
+  date.toISOString().replace(/\:/g, '_');
 
 const fromFolderName = (name: string): Date =>
-  new Date(name.replace(/_/g, ":"));
+  new Date(name.replace(/_/g, ':'));
 
 export const newRootDir = () => toFolderName(new Date());
 

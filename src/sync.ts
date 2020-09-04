@@ -1,6 +1,5 @@
-import { copyFile, mkdir, readdir, rename, stat, Stats } from "graceful-fs";
-import { tmpdir } from "os";
-import { join } from "path";
+import { copy, mkdir, move, readdir, stat, Stats } from 'fs-extra';
+import { join } from 'path';
 import {
   bindNodeCallback,
   combineLatest,
@@ -9,18 +8,20 @@ import {
   merge,
   Observable,
   UnaryFunction,
-} from "rxjs";
-import { catchError, mapTo, mergeMap, mergeMapTo } from "rxjs/operators";
-import { createMkdirp } from "./mkdir";
-import { latestRootDir, newRootDir } from "./root";
+} from 'rxjs';
+import { catchError, mapTo, mergeMap, mergeMapTo } from 'rxjs/operators';
+import { createMkdirp } from './mkdir';
+import { newRootDir } from './root';
 
 const rxReadDir = bindNodeCallback<string, string[]>(readdir);
 const rxStats = bindNodeCallback<string, Stats>(stat);
-const rxCopyFile = bindNodeCallback(copyFile);
-const rxRename = bindNodeCallback(rename);
+const rxCopy = bindNodeCallback(copy);
 const rxMkdir = bindNodeCallback(mkdir);
+const rxMove = bindNodeCallback(move);
 
 export type Path = string[];
+
+const CURRENT = 'current';
 
 const cmpStrings = (left: string, right: string): number =>
   left.localeCompare(right);
@@ -42,13 +43,13 @@ function doSync(
           mergeMap((childStats) =>
             childStats.isDirectory()
               ? rxMkdir(join(dst, ...rel, child)).pipe(
-                mergeMapTo(copyDeep([...rel, child]))
-              )
+                  mergeMapTo(copyDeep([...rel, child]))
+                )
               : childStats.isFile()
-                ? copyFlat([...rel, child])
-                : EMPTY
+              ? copyFlat([...rel, child])
+              : EMPTY
           ),
-          catchError(error => {
+          catchError((error) => {
             console.error(error);
             return EMPTY;
           })
@@ -57,23 +58,23 @@ function doSync(
     );
 
   const copyFlat = (rel: Path): Observable<Path> =>
-    rxCopyFile(join(src, ...rel), join(dst, ...rel)).pipe(mapTo(rel));
+    rxCopy(join(src, ...rel), join(dst, ...rel)).pipe(mapTo(rel));
 
-  const copy = (bFile: boolean, rel: Path): Observable<Path> =>
+  const copyFileOrDir = (bFile: boolean, rel: Path): Observable<Path> =>
     bFile
       ? copyFlat(rel)
-      : rxMkdir(join(dst, ...rel)).pipe(mergeMapTo(copyDeep(rel)));
+      : rxMkdir(join(dst, ...rel)).pipe(mergeMap(() => copyDeep(rel)));
 
   const backup = (rel: Path): Observable<Path> =>
     mkdirp(join(bkg, ...rel.slice(0, -1))).pipe(
-      mergeMap(() => rxRename(join(dst, ...rel), join(bkg, ...rel))),
+      mergeMap(() => rxMove(join(dst, ...rel), join(bkg, ...rel))),
       mapTo(rel)
     );
 
   const syncNew = (rel: Path): Observable<Path> =>
     rxStats(join(src, ...rel)).pipe(
-      mergeMap((stat) => copy(stat.isFile(), rel)),
-      catchError(error => {
+      mergeMap((stat) => copyFileOrDir(stat.isFile(), rel)),
+      catchError((error) => {
         console.error(error);
         return EMPTY;
       })
@@ -96,7 +97,9 @@ function doSync(
           return EMPTY;
         }
         // copy source to target location
-        return backup(rel).pipe(mergeMap(() => copy(statL.isFile(), rel)));
+        return backup(rel).pipe(
+          mergeMap(() => copyFileOrDir(statL.isFile(), rel))
+        );
       })
     );
   }
@@ -151,13 +154,12 @@ function doSync(
     return result.length == 0 ? EMPTY : merge(...result);
   }
 
-  function syncRecurse(rel: Path): Observable<Path> {
-    // combine
-    return combineLatest([
+  const syncRecurse = (rel: Path): Observable<Path> =>
+    combineLatest([
       rxReadDir(join(src, ...rel)),
       rxReadDir(join(dst, ...rel)),
     ]).pipe(mergeMap(([left, right]) => syncChildren(rel, left, right)));
-  }
+
   // start with the root folder
   return syncRecurse([]);
 }
@@ -175,19 +177,8 @@ const internalSync = (
 export function sync(src: string, root: string): Observable<Path> {
   // make sure to create the directories
   const mkdirp = createMkdirp();
-  const newName = newRootDir();
-  const dst = join(root, newName);
-  // ensure the target folder
-  return mkdirp(root).pipe(
-    mergeMap(latestRootDir),
-    mergeMap((lastName) => {
-      // rename the old directory to a new one
-      const bkg = join(root, lastName);
-      // rename
-      return rxRename(bkg, dst).pipe(
-        mergeMap(() => internalSync(src, dst, bkg, mkdirp))
-      );
-    }),
-    catchError((err) => internalSync(src, dst, tmpdir(), mkdirp))
-  );
+  const dst = join(root, CURRENT);
+  const bkg = join(root, newRootDir());
+  // fallback
+  return internalSync(src, dst, bkg, mkdirp);
 }
